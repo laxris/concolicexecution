@@ -7,9 +7,9 @@ For this task, we will apply concolic execution to the first RERS challange prob
 with slight updates as explained below.
 
 ## Setting up
-You can find a fully prepared virtual box with the correct environment for at
+You can find a fully prepared virtual box with the correct environment at
 
-> URL
+> https://www.dropbox.com/s/b1pgxgla9cah6bp/old%20sytem.ova?dl=0
 
 user "stre" has the password "CS4110". Alternatively, you can set up a Ubuntu 14.04/Linux with Kernel 3.13 and compile PIN-tools with gcc 4.4. Because new versions of PIN do not allow linking external libraries, we use the newest of the version 2, which in turn requires an older kernel. 
 
