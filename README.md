@@ -15,7 +15,7 @@ user "stre" has the password "CS4110". Alternatively, you can set up a Ubuntu 14
 
 You can find the crackme example from the blog post in 
 
-~/Downloads/pin-2.14-71313-gcc.4.4.7-linux/source/tools/ManualExamples 
+~/Downloads/pin-2.14-71313-gcc.4.4.7-linux/source/tools/Tasks 
 
 ```C++
 #include <stdio.h>
@@ -23,31 +23,28 @@ You can find the crackme example from the blog post in
 #include <stdlib.h>
 #include <fcntl.h>
 
-char *serial = "\x30\x39\x3c\x21\x30";
-
 int main(void)
 {
-  int fd, i = 0;
-  char buf[260] = {0};
-  char *r = buf;
+  int   fd;
+  char  buff[260] = {0};
 
   fd = open("serial.txt", O_RDONLY);
-  read(fd, r, 256);
+  read(fd, buff, 256);
   close(fd);
-  while (i < 5){
-    if ((*r ^ (0x55)) != *serial)
-      return 0;
-    r++, serial++, i++;
-  }
-  if (!*r)
-    printf("Good boy\n");
+
+  if (buff[0] != 'a') return -1;
+  if (buff[1] != 'b') return -1;
+  if (buff[2] != 'c') return -1;
+
+  printf("Good boy\n");
+
   return 0;
 }
 ```
 
 You can compile this normally, without any options
 
-gcc crackme1.c -o crackme1
+gcc easy.c -o easy
 
 Next, we need to complile the PIN tool for concolic execution. We already prepared all the code and the depenencies for Z3 described in the blog post. 
 
@@ -58,64 +55,33 @@ The code, similar to the blog post is in ConcolicExecution.cpp. You can compile 
 to both compile and link the binary for concolic execution:
 
 ```bash
-cat compile.sh 
-g++ -DBIGARRAY_MULTIPLIER=1 -DUSING_XED -Wall -Werror -Wno-unknown-pragmas -fno-stack-protector -DTARGET_IA32E -DHOST_IA32E -fPIC -DTARGET_LINUX  -I../../../source/include/pin -I../../../source/include/pin/gen -I../../../extras/components/include -I./z3/src/api/c++ -I../../../extras/xed2-intel64/include -I../../../source/tools/InstLib -O3 -fomit-frame-pointer -fno-strict-aliasing    -c -o obj-intel64/ConcolicExecution.o ConcolicExecution.cpp
+g++ -DBIGARRAY_MULTIPLIER=1 -Wall -Werror -Wno-unknown-pragmas -fno-stack-protector -DTARGET_IA32E -DHOST_IA32E -fPIC -DTARGET_LINUX  -I../../../source/include/pin -I../../../source/include/pin/gen -I../../../extras/components/include -I../../../extras/xed-intel64/include -I../../../source/tools/InstLib -O3 -fomit-frame-pointer -fno-strict-aliasing   -c -o obj-intel64/ConcolicExecution.o ConcolicExecution.cpp
 
-g++ -shared -Wl,--hash-style=sysv -Wl,-Bsymbolic -Wl,--version-script=../../../source/include/pin/pintool.ver    -o obj-intel64/ConcolicExecution.so obj-intel64/ConcolicExecution.o  -L../../../intel64/lib -L../../../intel64/lib-ext -L../../../intel64/runtime/glibc -L../../../extras/xed2-intel64/lib -lpin -lxed -ldwarf -lelf -ldl -lz3
+g++ -shared -Wl,--hash-style=sysv -Wl,-Bsymbolic -Wl,--version-script=../../../source/include/pin/pintool.ver    -o obj-intel64/ConcolicExecution.so obj-intel64/ConcolicExecution.o  -L../../../intel64/lib -L../../../intel64/lib-ext -L../../../intel64/runtime/glibc -L../../../extras/xed-intel64/lib -lpin -lxed -lpindwarf -ldl -lz3
 ```
 
 To execute the crackme under concolic execution, simple run:
 
-./run-crackme.sh ./crackme1
+./run.sh ./easy
 
 ```bash
-cat run-crackme.sh
-#!/bin/bash
-
-sudo ../../../pin.sh -t ./obj-intel64/ConcolicExecution.so -taint-file serial.txt -- $1
+sudo ../../../pin.sh -t ./obj-intel64/MyConcolicExecution.so -taint-file serial.txt -- $1
 ```
 
-(the password for the user is CS4110). 
+(the sudo password for the user is CS4110). 
 
-Upon each execution, PIN tool will execute the binary until it eaches a comparison (CMP) and builds the equation to fulfill the jump. It writes the sequence of discovered values to make each statement true into serial.txt.
-Then can be restarted to execute the program again, reading and using the values found and stored in serial.txt until it hits the next condition.
+Upon each execution, PIN tool will execute the binary until it eaches a comparison (CMP) and builds the equation to fulfill the jump. It writes the sequence of discovered values to make each statement true into serial.txt, assuming each check is done on a different variable.
+TThe tool can be re-run and executes the program again, reading and using the values found and stored in serial.txt until. Each time, it will get past one more condition.
 
-## RERS Challange
+## The task
 
-To apply this to the RERS challange, we need to add a small modification: The problems read input from stdin, so we modify it to read the input from serial.txt:
+Compile task.c, outline the different control flow paths (list or visualization as a graph), and use the pin tool to provide 
 
-```C++
-...
-    int fd, i = 0;
-    char buf[260] = {0};
-    char *r = buf;
+* Inputs generated to explore the paths
+* Path constraint constructed
+* Code executed causing ithe path constraints
 
-    fd = open("serial.txt", O_RDONLY);
-    read(fd, r, 256);
-    close(fd);
+Compare the path constraint to the if-conditions in the code and explain the differences.
 
-    printf("starting now\n");
-
-    // main i/o-loop
-    while(i < 100)
-...
-```
-
-Unfortunately, that is not enough: the way memory tainting is implemented, we do not catch all the comparision with the parameters/local variables in the *calculate_output* functions. Our work-around (without having to implement much more thorough tainting) is to make all comparisions with a global variable by making *input* global and then the functions from
-
->  void calculate_outputm22(int input)
-
-to 
-
-> void calculate_outputm22(int nonput)
-
-essentially changing all comparisions to comparisons with comparisions with global variables. The file with all modifications is Problem1.c which again can be compiled normally via
-
-gcc Problem1.c -o Problem1
-
-and then be used for concolic execution. We implemented taining more registers in MyConcolicExecution.c, which can be built and used using the following two commands:
-
-> ./mycomile.sh
-> ./run.sh ./Problem1
 
 
